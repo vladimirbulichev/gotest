@@ -17,7 +17,10 @@ type watchDog struct {
 }
 
 func newWatchDog() *watchDog {
-	return &watchDog{avail: 5, total: 0}
+	return &watchDog{
+		avail: 5,
+		total: 0,
+	}
 }
 
 func (w *watchDog) Add() {
@@ -26,10 +29,10 @@ func (w *watchDog) Add() {
 	w.avail--
 }
 
-func (w *watchDog) CheckAvail() bool {
+func (w *watchDog) CheckAvail() int {
 	w.Lock()
 	defer w.Unlock()
-	return w.avail > 0
+	return w.avail
 }
 
 func (w *watchDog) Release(c int) {
@@ -41,19 +44,23 @@ func (w *watchDog) Release(c int) {
 
 func main() {
 	in := os.Stdin
+	lock := make(chan int)
 	scanner := bufio.NewScanner(in)
 	wd := newWatchDog()
 	var wg sync.WaitGroup
 	for scanner.Scan() {
 		urlScan := scanner.Text()
-		for !wd.CheckAvail() {
-			fmt.Print("Wait\r")
+		if wd.CheckAvail() == 0 {
+			select {
+			case <-lock:
+			}
 		}
 		wd.Add()
 		wg.Add(1)
 		go func(url string) {
-			defer wg.Done()
 			wd.Release(wordCount(url))
+			wg.Done()
+			lock <- 1
 		}(urlScan)
 	}
 	wg.Wait()
@@ -71,6 +78,5 @@ func wordCount(url string) (c int) {
 	text := string(body)
 	c = strings.Count(text, "Go")
 	fmt.Printf("Count at %s : %d\n", url, c)
-	//	time.Sleep(1*time.Second)
 	return
 }
